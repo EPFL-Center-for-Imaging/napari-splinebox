@@ -1,5 +1,5 @@
 name: napari-splinebox
-display_name: splineobx
+display_name: splinebox
 # use 'hidden' to remove plugin from napari hub search results
 visibility: public
 # see https://napari.org/stable/plugins/manifest.html for valid categories
@@ -8,16 +8,16 @@ contributions:
   commands:
     - id: napari-splinebox.get_reader
       python_name: napari_splinebox._reader:napari_get_reader
-      title: Open data with splineobx
+      title: Open data with splinebox
     - id: napari-splinebox.write_multiple
       python_name: napari_splinebox._writer:write_multiple
-      title: Save multi-layer data with splineobx
+      title: Save multi-layer data with splinebox
     - id: napari-splinebox.write_single_image
       python_name: napari_splinebox._writer:write_single_image
-      title: Save image data with splineobx
+      title: Save image data with splinebox
     - id: napari-splinebox.make_sample_data
       python_name: napari_splinebox._sample_data:make_sample_data
-      title: Load sample data from splineobx
+      title: Load sample data from splinebox
     - id: napari-splinebox.make_container_widget
       python_name: napari_splinebox:ImageThreshold
       title: Make threshold Container widget
@@ -43,7 +43,7 @@ contributions:
       filename_extensions: ['.npy']
   sample_data:
     - command: napari-splinebox.make_sample_data
-      display_name: splineobx
+      display_name: splinebox
       key: unique_id.1
   widgets:
     - command: napari-splinebox.make_container_widget
