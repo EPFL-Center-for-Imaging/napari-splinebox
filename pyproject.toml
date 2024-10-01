@@ -28,7 +28,8 @@ dependencies = [
     "numpy",
     "magicgui",
     "qtpy",
-    "scikit-image",
+    "splinebox",
+    "pandas",
 ]
 
 [project.optional-dependencies]
