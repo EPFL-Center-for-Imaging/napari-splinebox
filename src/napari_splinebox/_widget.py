@@ -34,8 +34,8 @@ class SplineBox(Container):
             value="Knots",
             label="Point type:",
         )
-        self._resolution_widget = magicgui.widgets.create_widget(
-            100, label="Resolution:"
+        self._steps_widget = magicgui.widgets.create_widget(
+            100, label="Sampling steps between points:"
         )
         self._arc_length_sampling_widget = magicgui.widgets.CheckBox(
             text="Arc length sampling (slow, only click before saving)"
@@ -55,7 +55,7 @@ class SplineBox(Container):
         self._shapes_layer_widget.changed.connect(self._change_shapes_layer)
         self._basis_function_widget.changed.connect(self._update_spline_layer)
         self._point_type_widget.changed.connect(self._update_spline_layer)
-        self._resolution_widget.changed.connect(self._update_spline_layer)
+        self._steps_widget.changed.connect(self._update_spline_layer)
         self._arc_length_sampling_widget.changed.connect(
             self._update_spline_layer
         )
@@ -67,7 +67,7 @@ class SplineBox(Container):
                 self._shapes_layer_widget,
                 self._basis_function_widget,
                 self._point_type_widget,
-                self._resolution_widget,
+                self._steps_widget,
                 self._arc_length_sampling_widget,
                 self._save_folder_widget,
                 self._save_file_name_widget,
@@ -135,13 +135,14 @@ class SplineBox(Container):
                 )
 
             max_t = points.shape[0] if closed else points.shape[0] - 1
-            n_sampling = self._resolution_widget.value * (max_t + 1)
             if self._arc_length_sampling_widget.value:
                 length = spline.arc_length()
-                lengths = np.linspace(0, length, n_sampling)
+                step_size = length / (max_t * (self._steps_widget.value + 1))
+                lengths = np.linspace(0, length, round(length / step_size) + 1)
                 t = spline.arc_length_to_parameter(lengths)
             else:
-                t = np.linspace(0, max_t, n_sampling)
+                step_size = 1 / (self._steps_widget.value + 1)
+                t = np.linspace(0, max_t, round(max_t / step_size) + 1)
 
             values = spline.eval(t)
             spline_layer.add_paths(values)
@@ -160,6 +161,7 @@ class SplineBox(Container):
             dict_df["ID"].extend([spline_id] * len(t))
             values = spline.eval(t)
             # TODO extend to higher dimension
+            dict_df["t"].extend(t)
             dict_df["y"].extend(values[:, 0])
             dict_df["x"].extend(values[:, 1])
             dict_df["length"].extend(spline.arc_length(t))
