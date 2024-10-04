@@ -40,6 +40,9 @@ class SplineBox(Container):
         self._arc_length_sampling_widget = magicgui.widgets.CheckBox(
             text="Arc length sampling (slow, only click before saving)"
         )
+        self._pixel_size_widget = magicgui.widgets.create_widget(
+            1.0, label="Pixel size:"
+        )
         self._save_folder_widget = magicgui.widgets.FileEdit(
             mode="d", label="Folder"
         )
@@ -69,6 +72,7 @@ class SplineBox(Container):
                 self._point_type_widget,
                 self._steps_widget,
                 self._arc_length_sampling_widget,
+                self._pixel_size_widget,
                 self._save_folder_widget,
                 self._save_file_name_widget,
                 self._save_extension_widget,
@@ -156,15 +160,16 @@ class SplineBox(Container):
         extension = self._save_extension_widget.value
         path = folder / (file_name + extension)
         splines, ts = self._update_spline_layer()
+        pixel_size = self._pixel_size_widget.value
         dict_df = collections.defaultdict(list)
         for spline_id, (spline, t) in enumerate(zip(splines, ts)):
             dict_df["ID"].extend([spline_id] * len(t))
             values = spline.eval(t)
             # TODO extend to higher dimension
             dict_df["t"].extend(t)
-            dict_df["y"].extend(values[:, 0])
-            dict_df["x"].extend(values[:, 1])
-            dict_df["length"].extend(spline.arc_length(t))
-            dict_df["curvature"].extend(spline.curvature(t))
+            dict_df["y"].extend(values[:, 0] * pixel_size)
+            dict_df["x"].extend(values[:, 1] * pixel_size)
+            dict_df["length"].extend(spline.arc_length(t) * pixel_size)
+            dict_df["curvature"].extend(spline.curvature(t) / pixel_size)
         df = pd.DataFrame(dict_df)
         df.to_csv(path)
