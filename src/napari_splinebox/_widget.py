@@ -37,6 +37,9 @@ class SplineBox(Container):
         self._steps_widget = magicgui.widgets.create_widget(
             100, label="Sampling steps between points:"
         )
+        self._comb_height_widget = magicgui.widgets.create_widget(
+            50.0, label="Height of curvature comb:"
+        )
         self._arc_length_sampling_widget = magicgui.widgets.CheckBox(
             text="Arc length sampling (slow, only click before saving)"
         )
@@ -59,6 +62,7 @@ class SplineBox(Container):
         self._basis_function_widget.changed.connect(self._update_spline_layer)
         self._point_type_widget.changed.connect(self._update_spline_layer)
         self._steps_widget.changed.connect(self._update_spline_layer)
+        self._comb_height_widget.changed.connect(self._update_spline_layer)
         self._arc_length_sampling_widget.changed.connect(
             self._update_spline_layer
         )
@@ -71,6 +75,7 @@ class SplineBox(Container):
                 self._basis_function_widget,
                 self._point_type_widget,
                 self._steps_widget,
+                self._comb_height_widget,
                 self._arc_length_sampling_widget,
                 self._pixel_size_widget,
                 self._save_folder_widget,
@@ -79,6 +84,18 @@ class SplineBox(Container):
                 self._save_widget,
             ]
         )
+
+    def _get_curvature_layer(self):
+        shapes_layer = self._shapes_layer_widget.value
+        curvature_layer_name = f"{shapes_layer.name} curvature"
+        if curvature_layer_name not in self._viewer.layers:
+            self._viewer.add_shapes(
+                edge_color="blue",
+                edge_width=2,
+                opacity=0.5,
+                name=curvature_layer_name,
+            )
+        return self._viewer.layers[curvature_layer_name]
 
     def _get_spline_layer(self):
         shapes_layer = self._shapes_layer_widget.value
@@ -99,8 +116,17 @@ class SplineBox(Container):
 
     def _update_spline_layer(self):
         spline_layer = self._get_spline_layer()
+        # Select everythin and remove it
         spline_layer.selected_data = set(range(len(spline_layer.shape_type)))
         spline_layer.remove_selected()
+
+        curvature_layer = self._get_curvature_layer()
+        # Select everythin and remove it
+        curvature_layer.selected_data = set(
+            range(len(curvature_layer.shape_type))
+        )
+        curvature_layer.remove_selected()
+
         splines = []
         ts = []
         for i, shape_type in enumerate(
@@ -150,6 +176,18 @@ class SplineBox(Container):
 
             values = spline.eval(t)
             spline_layer.add_paths(values)
+
+            normals = spline.normal(t)
+            curvature = spline.curvature(t)
+            max_comb_height = self._comb_height_widget.value
+            d = max_comb_height / np.max(np.abs(curvature))
+            comb = values + d * curvature[:, np.newaxis] * normals
+            curvature_layer.add_paths(comb)
+            for p in range(0, len(comb), 7):
+                curvature_layer.add_paths(
+                    np.stack([values[p], comb[p]], axis=0)
+                )
+
             splines.append(spline)
             ts.append(t)
         return splines, ts
