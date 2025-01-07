@@ -2,10 +2,13 @@ import collections
 from typing import TYPE_CHECKING
 
 import magicgui
+import napari.utils
 import numpy as np
 import pandas as pd
 import splinebox
 from magicgui.widgets import Container, create_widget
+
+import napari_splinebox._main as _main
 
 if TYPE_CHECKING:
     import napari
@@ -21,12 +24,12 @@ class SplineBox(Container):
         )
         self._basis_function_widget = magicgui.widgets.ComboBox(
             choices=(
-                splinebox.basis_functions.B1,
-                splinebox.basis_functions.B3,
-                splinebox.basis_functions.Exponential,
-                splinebox.basis_functions.CatmullRom,
+                str(splinebox.basis_functions.B1()),
+                str(splinebox.basis_functions.B3()),
+                str(splinebox.basis_functions.Exponential(M=5)),
+                str(splinebox.basis_functions.CatmullRom()),
             ),
-            value=splinebox.basis_functions.B3,
+            value=str(splinebox.basis_functions.B3()),
             label="Basis function:",
         )
         self._point_type_widget = magicgui.widgets.ComboBox(
@@ -58,9 +61,15 @@ class SplineBox(Container):
         self._save_widget = magicgui.widgets.PushButton(text="Save")
 
         # connect your callbacks
-        self._shapes_layer_widget.changed.connect(self._change_shapes_layer)
-        self._basis_function_widget.changed.connect(self._update_spline_layer)
-        self._point_type_widget.changed.connect(self._update_spline_layer)
+        self._shapes_layer_widget.changed.connect(
+            self._callback_change_shapes_layer
+        )
+        self._basis_function_widget.changed.connect(
+            self._update_properties_and_layers
+        )
+        self._point_type_widget.changed.connect(
+            self._update_properties_and_layers
+        )
         self._steps_widget.changed.connect(self._update_spline_layer)
         self._comb_height_widget.changed.connect(self._update_spline_layer)
         self._arc_length_sampling_widget.changed.connect(
@@ -108,89 +117,129 @@ class SplineBox(Container):
             )
         return self._viewer.layers[spline_layer_name]
 
-    def _change_shapes_layer(self):
+    def _callback_change_shapes_layer(self):
+        self._update_spline_layer(update_all=True)
+        shapes_layer = self._shapes_layer_widget.value
+        shapes_layer.events.data.connect(
+            self._callback_change_in_shapes_layer_data
+        )
+        # This is a hack because there is no event for selected_data
+        # https://github.com/napari/napari/issues/6886
+        shapes_layer.events.highlight.connect(
+            self._callback_change_in_shapes_layer_selected_data
+        )
+
+    def _callback_change_in_shapes_layer_data(self, event):
+        shapes_layer = self._shapes_layer_widget.value
+
+        if event.action == "adding":
+            pass
+        elif event.action == "added":
+            self._update_properties_and_layers()
+        elif event.action == "removing":
+            pass
+        elif event.action == "removed":
+            spline_layer = self._get_spline_layer()
+            spline_layer.selected_data = shapes_layer.selected_data
+            spline_layer.remove_selected()
+        elif event.action == "changed":
+            self._update_properties_and_layers()
+
+    def _update_properties_and_layers(self):
+        self._set_properties()
         self._update_spline_layer()
-        self._shapes_layer_widget.value.events.data.connect(
-            self._update_spline_layer
-        )
 
-    def _update_spline_layer(self):
+    def _set_properties(self):
+        shapes_layer = self._shapes_layer_widget.value
+        new_properties = shapes_layer.properties
+
+        for i in shapes_layer.selected_data:
+            if "basis_function" not in new_properties:
+                new_properties["basis_function"] = np.array(
+                    [self._basis_function_widget.value]
+                )
+                new_properties["point_type"] = np.array(
+                    [self._point_type_widget.value]
+                )
+            elif i < len(new_properties["basis_function"]):
+                new_properties["basis_function"][
+                    i
+                ] = self._basis_function_widget.value
+                new_properties["point_type"][i] = self._point_type_widget.value
+            elif i == len(new_properties["basis_function"]):
+                basis_functions = list(new_properties["basis_function"])
+                basis_functions.append(self._basis_function_widget.value)
+                new_properties["basis_function"] = basis_functions
+                point_types = list(new_properties["point_type"])
+                point_types.append(self._point_type_widget.value)
+                new_properties["point_type"] = point_types
+            else:
+                raise RuntimeError(
+                    f"selected shape {i} but the basis function property has length {len(new_properties['basis_function'])}"
+                )
+        shapes_layer.properties = new_properties
+
+    def _update_spline_layer(self, update_all=False):
+        """
+        Update all updates all splines even if they are not selected.
+        """
+        shapes_layer = self._shapes_layer_widget.value
+        if update_all:
+            selected = set(np.arange(len(shapes_layer.data)))
+        else:
+            selected = shapes_layer.selected_data
+
         spline_layer = self._get_spline_layer()
-        # Select everythin and remove it
-        spline_layer.selected_data = set(range(len(spline_layer.shape_type)))
-        spline_layer.remove_selected()
+        # curvature_layer = self._get_curvature_layer()
 
-        curvature_layer = self._get_curvature_layer()
-        # Select everythin and remove it
-        curvature_layer.selected_data = set(
-            range(len(curvature_layer.shape_type))
-        )
-        curvature_layer.remove_selected()
+        for i in selected:
+            # spline_layer.selected_data = {i}
+            # curvature_layer.selected_data = {i}
 
-        splines = []
-        ts = []
-        for i, shape_type in enumerate(
-            self._shapes_layer_widget.value.shape_type
-        ):
-            if shape_type not in ["path", "polygon"]:
-                print(f"Cannot convert shape type {shape_type} into a spline.")
-                continue
-            closed = shape_type == "polygon"
-            points = self._shapes_layer_widget.value.data[i]
-            M = points.shape[0]
-            if (
-                self._basis_function_widget.value
-                == splinebox.basis_functions.Exponential
-            ):
-                basis_function = self._basis_function_widget.value(M)
-            else:
-                basis_function = self._basis_function_widget.value()
-            if basis_function.support > M:
-                print(
-                    f"You need to create at least {basis_function.support} points for this basis function."
-                )
-                return
-            spline = splinebox.spline_curves.Spline(
-                M=M,
-                basis_function=basis_function,
-                closed=closed,
+            spline = _main.spline_from_shapes_layer(
+                self._shapes_layer_widget.value, i
             )
-            if self._point_type_widget.value == "Knots":
-                spline.knots = points
-            elif self._point_type_widget.value == "Control points":
-                spline.control_points = points
-            else:
-                raise ValueError(
-                    f"Unkown point type {self._point_type_widget.value}"
-                )
 
-            max_t = points.shape[0] if closed else points.shape[0] - 1
-            if self._arc_length_sampling_widget.value:
-                length = spline.arc_length()
-                step_size = length / (max_t * (self._steps_widget.value + 1))
-                lengths = np.linspace(0, length, round(length / step_size) + 1)
-                t = spline.arc_length_to_parameter(lengths)
-            else:
-                step_size = 1 / (self._steps_widget.value + 1)
-                t = np.linspace(0, max_t, round(max_t / step_size) + 1)
+            max_t = spline.M if spline.closed else spline.M - 1
+            step_size = 1 / (self._steps_widget.value + 1)
+            t = np.linspace(0, max_t, round(max_t / step_size) + 1)
 
             values = spline.eval(t)
-            spline_layer.add_paths(values)
+            if i < len(spline_layer.data):
+                new_data = spline_layer.data
+                new_data[i] = values
+                spline_layer.data = new_data
+                spline_layer.refresh()
+            else:
+                spline_layer.add_paths(values)
 
-            normals = spline.normal(t)
-            curvature = spline.curvature(t)
-            max_comb_height = self._comb_height_widget.value
-            d = max_comb_height / np.max(np.abs(curvature))
-            comb = values + d * curvature[:, np.newaxis] * normals
-            curvature_layer.add_paths(comb)
-            for p in range(0, len(comb), 7):
-                curvature_layer.add_paths(
-                    np.stack([values[p], comb[p]], axis=0)
-                )
+            # normals = spline.normal(t)
+            # curvature = spline.curvature(t)
+            # max_comb_height = self._comb_height_widget.value
+            # d = max_comb_height / np.max(np.abs(curvature))
+            # comb = values + d * curvature[:, np.newaxis] * normals
 
-            splines.append(spline)
-            ts.append(t)
-        return splines, ts
+            # curvature_layer.add_paths(comb)
+            # for p in range(0, len(comb), 7):
+            #     curvature_layer.add_paths(
+            #         np.stack([values[p], comb[p]], axis=0)
+            #     )
+
+    def _callback_change_in_shapes_layer_selected_data(self):
+        shapes_layer = self._shapes_layer_widget.value
+        if len(shapes_layer.properties) == 0:
+            return
+        selected = list(shapes_layer.selected_data)
+        if len(selected) == 1:
+            index = selected[0]
+            self._basis_function_widget.value = shapes_layer.properties[
+                "basis_function"
+            ][index]
+            self._point_type_widget.value = shapes_layer.properties[
+                "point_type"
+            ][index]
+        elif len(selected) > 1:
+            pass
 
     def _save(self):
         folder = self._save_folder_widget.value

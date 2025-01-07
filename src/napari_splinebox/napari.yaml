@@ -6,32 +6,32 @@ visibility: public
 categories: ["Annotation", "Segmentation"]
 contributions:
   commands:
-    # - id: napari-splinebox.get_reader
-    #   python_name: napari_splinebox._reader:napari_get_reader
-    #   title: Open data with splinebox
-    # - id: napari-splinebox.write_multiple
-    #   python_name: napari_splinebox._writer:write_multiple
-    #   title: Save multi-layer data with splinebox
-    # - id: napari-splinebox.write_single_image
-    #   python_name: napari_splinebox._writer:write_single_image
-    #   title: Save image data with splinebox
+    - id: napari-splinebox.get_reader
+      python_name: napari_splinebox._reader:napari_get_reader
+      title: Open data with splinebox
+    - id: napari-splinebox.write_multiple_layers
+      python_name: napari_splinebox._writer:write_multiple_layers
+      title: Save multi-layer data with splinebox
+    - id: napari-splinebox.write_single_shapes_layer
+      python_name: napari_splinebox._writer:write_single_shapes_layer
+      title: Save image data with splinebox
     # - id: napari-splinebox.make_sample_data
     #   python_name: napari_splinebox._sample_data:make_sample_data
     #   title: Load sample data from splinebox
     - id: napari-splinebox.make_container_widget
       python_name: napari_splinebox:SplineBox
       title: Make threshold Container widget
-  # readers:
-  #   - command: napari-splinebox.get_reader
-  #     accepts_directories: false
-  #     filename_patterns: ['*.npy']
-  # writers:
-  #   - command: napari-splinebox.write_multiple
-  #     layer_types: ['image*','labels*']
-  #     filename_extensions: []
-  #   - command: napari-splinebox.write_single_image
-  #     layer_types: ['image']
-  #     filename_extensions: ['.npy']
+  readers:
+    - command: napari-splinebox.get_reader
+      accepts_directories: false
+      filename_patterns: ['*.json']
+  writers:
+    - command: napari-splinebox.write_multiple_layers
+      layer_types: ['shapes*',]
+      filename_extensions: []
+    - command: napari-splinebox.write_single_shapes_layer
+      layer_types: ['shapes']
+      filename_extensions: ['.json']
   # sample_data:
   #   - command: napari-splinebox.make_sample_data
   #     display_name: splinebox

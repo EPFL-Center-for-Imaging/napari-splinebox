@@ -7,6 +7,7 @@ https://napari.org/stable/plugins/guides.html?#readers
 """
 
 import numpy as np
+import splinebox
 
 
 def napari_get_reader(path):
@@ -30,7 +31,7 @@ def napari_get_reader(path):
         path = path[0]
 
     # if we know we cannot read the file, we immediately return None.
-    if not path.endswith(".npy"):
+    if not path.endswith(".json"):
         return None
 
     # otherwise we return the *function* that can read ``path``.
@@ -60,14 +61,24 @@ def reader_function(path):
         default to layer_type=="image" if not provided
     """
     # handle both a string and a list of strings
-    paths = [path] if isinstance(path, str) else path
-    # load all files into array
-    arrays = [np.load(_path) for _path in paths]
-    # stack arrays into single array
-    data = np.squeeze(np.stack(arrays))
+    # paths = [path] if isinstance(path, str) else path
+
+    # load splines from json files
+    splines = splinebox.spline_curves.splines_from_json(path)
+
+    data = [spline.control_points for spline in splines]
 
     # optional kwargs for the corresponding viewer.add_* method
-    add_kwargs = {}
-
-    layer_type = "image"  # optional, default is "image"
+    add_kwargs = {
+        "shape_type": [
+            "polygon" if spline.closed else "path" for spline in splines
+        ],
+        "properties": {
+            "point_type": np.array(["Control points" for spline in splines]),
+            "basis_function": np.array(
+                [str(spline.basis_function) for spline in splines]
+            ),
+        },
+    }
+    layer_type = "shapes"
     return [(data, add_kwargs, layer_type)]
