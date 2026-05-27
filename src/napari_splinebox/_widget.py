@@ -204,7 +204,7 @@ class SplineBox(Container):
             step_size = 1 / (self._steps_widget.value + 1)
             t = np.linspace(0, max_t, round(max_t / step_size) + 1)
 
-            values = spline.eval(t)
+            values = spline(t)
             if i < len(spline_layer.data):
                 new_data = spline_layer.data
                 new_data[i] = values
@@ -251,7 +251,7 @@ class SplineBox(Container):
         dict_df = collections.defaultdict(list)
         for spline_id, (spline, t) in enumerate(zip(splines, ts)):
             dict_df["ID"].extend([spline_id] * len(t))
-            values = spline.eval(t)
+            values = spline(t)
             # TODO extend to higher dimension
             dict_df["t"].extend(t)
             dict_df["y"].extend(values[:, 0] * pixel_size)
